@@ -1,0 +1,6 @@
+{
+  "name": "Tech Interview Prep",
+  "description": "Comprehensive .NET, C#, SQL, ASP.NET MVC, and Web API technical interview preparation platform with detailed answers, code examples, and study tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
