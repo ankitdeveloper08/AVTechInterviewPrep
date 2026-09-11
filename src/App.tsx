@@ -7,6 +7,7 @@ import { FlashcardMode } from './components/FlashcardMode';
 import { StatsModal } from './components/StatsModal';
 import {
   loadQuestions,
+  loadQuestionsFromServer,
   saveQuestions,
   toggleBookmarkStorage,
   toggleMasteredStorage,
@@ -25,6 +26,20 @@ export default function App() {
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<InterviewQuestion | null>(null);
   const [isStudyMode, setIsStudyMode] = useState(false);
+  const [isStorageReady, setIsStorageReady] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    loadQuestionsFromServer(loadQuestions()).then((storedQuestions) => {
+      if (!isMounted) return;
+      setQuestions(storedQuestions);
+      setIsStorageReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter questions based on Category, Search Query, and Bookmark status
   const filteredQuestions = useMemo(() => {
@@ -68,20 +83,19 @@ export default function App() {
     }
   }, [filteredQuestions, selectedQuestionId]);
 
+  useEffect(() => {
+    if (isStorageReady) saveQuestions(questions);
+  }, [questions, isStorageReady]);
+
   // Handle Save Question (Add or Edit)
   const handleSaveQuestion = (savedQ: InterviewQuestion) => {
-    setQuestions((prev) => {
-      const existsIndex = prev.findIndex((q) => q.id === savedQ.id);
-      let updated: InterviewQuestion[];
-      if (existsIndex >= 0) {
-        updated = [...prev];
-        updated[existsIndex] = savedQ;
-      } else {
-        updated = [...prev, savedQ].sort((a, b) => a.questionNumber - b.questionNumber);
-      }
-      saveQuestions(updated);
-      return updated;
-    });
+    const existsIndex = questions.findIndex((q) => q.id === savedQ.id);
+    const updated = existsIndex >= 0
+      ? questions.map((q, index) => (index === existsIndex ? savedQ : q))
+      : [...questions, savedQ].sort((a, b) => a.questionNumber - b.questionNumber);
+
+    saveQuestions(updated);
+    setQuestions(updated);
     setSelectedQuestionId(savedQ.id);
   };
 

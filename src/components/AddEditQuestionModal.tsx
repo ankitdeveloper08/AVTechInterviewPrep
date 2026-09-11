@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { X, Check } from 'lucide-react';
-import { InterviewQuestion, QuestionCategory } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Check, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { InterviewQuestion, QuestionCategory, QuestionImage } from '../types';
 import { CATEGORIES } from '../data/categories';
 
 interface AddEditQuestionModalProps {
@@ -21,7 +21,11 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
   const [category, setCategory] = useState<QuestionCategory>('C# / OOPS');
   const [questionNumber, setQuestionNumber] = useState<number>(nextQuestionNumber);
   const [title, setTitle] = useState('');
+  const [images, setImages] = useState<QuestionImage[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [detailedPointsText, setDetailedPointsText] = useState('');
+  const detailedPointsRef = useRef<HTMLTextAreaElement>(null);
   const [codeLanguage, setCodeLanguage] = useState('csharp');
   const [code, setCode] = useState('');
   const [codeExplanation, setCodeExplanation] = useState('');
@@ -34,6 +38,9 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
       setCategory(editingQuestion.category);
       setQuestionNumber(editingQuestion.questionNumber);
       setTitle(editingQuestion.title);
+      setImages(editingQuestion.images || (editingQuestion.screenshot
+        ? [{ id: `legacy-${editingQuestion.id}`, dataUrl: editingQuestion.screenshot }]
+        : []));
       setDetailedPointsText(editingQuestion.detailedPoints.join('\n'));
       setCodeLanguage(editingQuestion.codeSnippet?.language || 'csharp');
       setCode(editingQuestion.codeSnippet?.code || '');
@@ -45,6 +52,7 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
       setCategory('C# / OOPS');
       setQuestionNumber(nextQuestionNumber);
       setTitle('');
+      setImages([]);
       setDetailedPointsText('');
       setCodeLanguage('csharp');
       setCode('');
@@ -76,6 +84,8 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
       questionNumber: questionNumber,
       category: category,
       title: title.trim().toUpperCase(),
+      screenshot: undefined,
+      images: images.length > 0 ? images : undefined,
       detailedPoints: points.length > 0 ? points : [title.trim()],
       codeSnippet: code.trim()
         ? {
@@ -93,6 +103,63 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
 
     onSave(updated);
     onClose();
+  };
+
+  const handleScreenshotFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const response = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!response.ok) throw new Error('Upload failed');
+      const result = await response.json() as { src?: string };
+      if (!result.src) throw new Error('Upload did not return an asset URL');
+      setImages((current) => [
+        ...current,
+        { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, src: result.src },
+      ]);
+    } catch {
+      setUploadError(`Unable to upload ${file.name}.`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleScreenshotChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    for (const file of Array.from(e.target.files || [])) {
+      await handleScreenshotFile(file);
+    }
+    e.target.value = '';
+  };
+
+  const handleScreenshotPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const imageItem = Array.from(e.clipboardData.items).find((item) =>
+      item.type.startsWith('image/')
+    );
+    const file = imageItem?.getAsFile();
+    if (!file) return;
+
+    e.preventDefault();
+    void handleScreenshotFile(file);
+  };
+
+  const insertImageAtCursor = (imageId: string) => {
+    const textarea = detailedPointsRef.current;
+    if (!textarea) return;
+    const marker = `[[IMAGE:${imageId}]]`;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextText = `${detailedPointsText.slice(0, start)}${marker}${detailedPointsText.slice(end)}`;
+    setDetailedPointsText(nextText);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + marker.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
   };
 
   return (
@@ -188,12 +255,63 @@ export const AddEditQuestionModal: React.FC<AddEditQuestionModalProps> = ({
             </label>
             <textarea
               rows={5}
+              ref={detailedPointsRef}
               value={detailedPointsText}
               onChange={(e) => setDetailedPointsText(e.target.value)}
               placeholder="Enter explanation points, definitions, comparison details..."
               className="w-full rounded-lg border border-slate-200 p-3 text-xs leading-relaxed focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
               required
             />
+          </div>
+
+          {/* Screenshot */}
+          <div
+            onPaste={handleScreenshotPaste}
+            className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                <ImageIcon className="h-4 w-4 text-blue-600" />
+                Screenshot (Optional)
+              </label>
+              <label className="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-100">
+                {isUploading ? 'Uploading...' : 'Choose Image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleScreenshotChange}
+                  multiple
+                  disabled={isUploading}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+            {images.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {images.map((image, index) => (
+                  <div key={image.id} className="relative overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <img src={image.src || image.dataUrl} alt={`Screenshot ${index + 1} preview`} className="h-36 w-full object-contain" />
+                    <div className="flex items-center justify-between border-t border-slate-100 p-2">
+                      <span className="text-[11px] text-slate-500">Image {index + 1}</span>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => insertImageAtCursor(image.id)} className="text-[11px] font-semibold text-blue-600 hover:text-blue-800">
+                          Insert here
+                        </button>
+                        <button type="button" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} className="flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-800">
+                          <Trash2 className="h-3 w-3" />
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                Upload multiple images or paste an image here with Ctrl+V. Place the cursor in the answer, then select “Insert here”.
+              </p>
+            )}
+            {uploadError && <p className="mt-2 text-[11px] font-semibold text-rose-600">{uploadError}</p>}
           </div>
 
           {/* Code Snippet */}

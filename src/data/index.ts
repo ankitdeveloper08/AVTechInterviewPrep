@@ -21,14 +21,17 @@ export function loadQuestions(): InterviewQuestion[] {
     const bookmarks = getBookmarks();
     const mastered = getMastered();
 
-    let list: InterviewQuestion[] = saved ? JSON.parse(saved) : INITIAL_QUESTIONS;
+      const parsed = saved ? JSON.parse(saved) : null;
+      const list: InterviewQuestion[] = Array.isArray(parsed) ? parsed : INITIAL_QUESTIONS;
 
     // Synchronize bookmarks and mastered state
-    return list.map(q => ({
-      ...q,
-      isBookmarked: bookmarks.includes(q.id),
-      status: mastered.includes(q.id) ? 'mastered' : q.status || 'unviewed'
-    }));
+      return list
+        .map(q => ({
+          ...q,
+          isBookmarked: bookmarks.includes(q.id),
+          status: mastered.includes(q.id) ? 'mastered' : q.status || 'unviewed'
+        }))
+        .sort((a, b) => a.questionNumber - b.questionNumber);
   } catch {
     return INITIAL_QUESTIONS;
   }
@@ -39,6 +42,37 @@ export function saveQuestions(questions: InterviewQuestion[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
   } catch (e) {
     console.error('Failed to save questions to local storage', e);
+  }
+
+  void fetch('/api/questions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(questions),
+  }).catch(() => {
+    // Local storage remains the fallback when the API is unavailable.
+  });
+}
+
+export async function loadQuestionsFromServer(
+  localQuestions: InterviewQuestion[]
+): Promise<InterviewQuestion[]> {
+  try {
+    const response = await fetch('/api/questions');
+    if (!response.ok) return localQuestions;
+
+    const payload = await response.json() as {
+      questions?: InterviewQuestion[];
+      persisted?: boolean;
+    };
+
+    if (!payload.persisted) {
+      saveQuestions(localQuestions);
+      return localQuestions;
+    }
+
+    return Array.isArray(payload.questions) ? payload.questions : localQuestions;
+  } catch {
+    return localQuestions;
   }
 }
 

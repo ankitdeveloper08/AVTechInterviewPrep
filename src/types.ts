@@ -28,12 +28,20 @@ export interface VisualDiagram {
   data?: any;
 }
 
+export interface QuestionImage {
+  id: string;
+  src?: string;
+  dataUrl?: string;
+}
+
 export interface InterviewQuestion {
   id: number;
   questionNumber: number;
   category: QuestionCategory;
   title: string;
   shortSummary?: string;
+  screenshot?: string;
+  images?: QuestionImage[];
   detailedPoints: string[];
   codeSnippet?: {
     language: string;

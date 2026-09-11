@@ -36,6 +36,9 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const images = question.images || (question.screenshot
+    ? [{ id: `legacy-${question.id}`, dataUrl: question.screenshot }]
+    : []);
 
   const handleCopyAnswer = () => {
     const textToCopy = `${question.title}\n\n` +
@@ -120,6 +123,16 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
           </h2>
         </div>
 
+        {question.screenshot && !question.images && (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+            <img
+              src={question.screenshot}
+              alt={`Screenshot for ${question.title}`}
+              className="max-h-[34rem] w-full rounded-xl object-contain"
+            />
+          </div>
+        )}
+
         {/* DETAILED ANSWER CARD (exact green container matching image.png) */}
         <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm ring-1 ring-slate-900/5">
           {/* Card Accent Header */}
@@ -155,6 +168,17 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
           {/* Answer Points Content - formatted as styled green-tinted boxes matching image.png */}
           <div className="p-6 sm:p-8 space-y-4">
             {question.detailedPoints.map((point, index) => {
+              const imageMarker = point.match(/^\[\[IMAGE:(.+)\]\]$/);
+              if (imageMarker) {
+                const image = images.find((item) => item.id === imageMarker[1]);
+                if (!image) return null;
+                return (
+                  <div key={index} className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                    <img src={image.src || image.dataUrl} alt={`Reference image ${index + 1}`} className="max-h-[34rem] w-full rounded-lg object-contain" />
+                  </div>
+                );
+              }
+
               // Highlight major headings or lines
               const isHeading = point.startsWith('CLASS') || point.startsWith('OBJECT') || point.startsWith('Here are') || point.startsWith('Key Differences:');
               return (
@@ -170,6 +194,18 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
                 </div>
               );
             })}
+
+            {images.some((image) => !question.detailedPoints.includes(`[[IMAGE:${image.id}]]`)) && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {images
+                  .filter((image) => !question.detailedPoints.includes(`[[IMAGE:${image.id}]]`))
+                  .map((image, index) => (
+                    <div key={image.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                      <img src={image.src || image.dataUrl} alt={`Reference image ${index + 1}`} className="max-h-[28rem] w-full rounded-lg object-contain" />
+                    </div>
+                  ))}
+              </div>
+            )}
 
             {/* Visual Concept Diagram if present */}
             {question.diagram && <DiagramRenderer diagram={question.diagram} />}
