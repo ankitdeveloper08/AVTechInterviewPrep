@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { BookOpen, LogIn } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { QuestionDetail } from './components/QuestionDetail';
@@ -9,13 +10,14 @@ import {
   loadQuestions,
   loadQuestionsFromServer,
   saveQuestions,
-  toggleBookmarkStorage,
-  toggleMasteredStorage,
   resetQuestionsToDefault,
 } from './data';
-import { InterviewQuestion, QuestionCategory } from './types';
+import { AuthUser, InterviewQuestion, QuestionCategory } from './types';
 
 export default function App() {
+  const questionManagerEmail = 'ankitdeveloper08@gmail.com';
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [questions, setQuestions] = useState<InterviewQuestion[]>(() => loadQuestions());
   const [selectedQuestionId, setSelectedQuestionId] = useState<number>(1);
   const [activeCategory, setActiveCategory] = useState<QuestionCategory>('All Topics');
@@ -30,14 +32,38 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-    loadQuestionsFromServer(loadQuestions()).then((storedQuestions) => {
-      if (!isMounted) return;
-      setQuestions(storedQuestions);
-      setIsStorageReady(true);
-    });
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+
+    fetch('/api/auth/me', { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('Auth check failed');
+        return response.json();
+      })
+      .then((payload: { user?: AuthUser | null }) => {
+        if (!isMounted) return;
+        setUser(payload.user || null);
+        if (payload.user) {
+          const userQuestions = loadQuestions(payload.user.id);
+          return loadQuestionsFromServer(userQuestions, payload.user.id).then((storedQuestions) => {
+            if (!isMounted) return;
+            setQuestions(storedQuestions);
+            setIsStorageReady(true);
+          });
+        }
+      })
+      .catch(() => {
+        if (isMounted) setUser(null);
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (isMounted) setAuthLoading(false);
+      });
 
     return () => {
       isMounted = false;
+      controller.abort();
+      window.clearTimeout(timeout);
     };
   }, []);
 
@@ -84,8 +110,21 @@ export default function App() {
   }, [filteredQuestions, selectedQuestionId]);
 
   useEffect(() => {
-    if (isStorageReady) saveQuestions(questions);
-  }, [questions, isStorageReady]);
+    if (isStorageReady && user) saveQuestions(questions, user.id);
+  }, [questions, isStorageReady, user]);
+
+  if (authLoading) return <div className="flex h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Checking your sign-in...</div>;
+
+  if (!user) return (
+    <div className="flex h-screen items-center justify-center bg-slate-50 p-6">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white"><BookOpen className="h-6 w-6" /></div>
+        <h1 className="text-xl font-bold text-slate-900">Tech Interview Prep</h1>
+        <p className="mt-2 text-sm text-slate-500">Sign in to save your questions, bookmarks, and progress.</p>
+        <a href="/api/auth/google" className="mt-6 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"><LogIn className="h-4 w-4" /> Continue with Google</a>
+      </div>
+    </div>
+  );
 
   // Handle Save Question (Add or Edit)
   const handleSaveQuestion = (savedQ: InterviewQuestion) => {
@@ -94,7 +133,7 @@ export default function App() {
       ? questions.map((q, index) => (index === existsIndex ? savedQ : q))
       : [...questions, savedQ].sort((a, b) => a.questionNumber - b.questionNumber);
 
-    saveQuestions(updated);
+    saveQuestions(updated, user.id);
     setQuestions(updated);
     setSelectedQuestionId(savedQ.id);
   };
@@ -102,25 +141,23 @@ export default function App() {
   // Toggle Bookmark
   const handleToggleBookmark = (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const newStatus = toggleBookmarkStorage(id);
     setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, isBookmarked: newStatus } : q))
+      prev.map((q) => (q.id === id ? { ...q, isBookmarked: !q.isBookmarked } : q))
     );
   };
 
   // Toggle Mastered
   const handleToggleMastered = (id: number) => {
-    const newStatus = toggleMasteredStorage(id);
     setQuestions((prev) =>
       prev.map((q) =>
-        q.id === id ? { ...q, status: newStatus ? 'mastered' : 'unviewed' } : q
+        q.id === id ? { ...q, status: q.status === 'mastered' ? 'unviewed' : 'mastered' } : q
       )
     );
   };
 
   // Reset to default
   const handleResetDefaults = () => {
-    const defaults = resetQuestionsToDefault();
+    const defaults = resetQuestionsToDefault(user.id);
     setQuestions(defaults);
     setSelectedQuestionId(1);
     setActiveCategory('All Topics');
@@ -148,6 +185,7 @@ export default function App() {
   const bookmarkedCount = questions.filter((q) => q.isBookmarked).length;
   const nextQuestionNum =
     questions.length > 0 ? Math.max(...questions.map((q) => q.questionNumber)) + 1 : 1;
+  const canManageQuestions = user.email.toLowerCase() === questionManagerEmail;
 
   return (
     <div className="flex h-screen flex-col bg-white text-slate-900 font-sans selection:bg-blue-500 selection:text-white antialiased">
@@ -169,6 +207,12 @@ export default function App() {
         showOnlyBookmarked={showOnlyBookmarked}
         onToggleShowBookmarked={() => setShowOnlyBookmarked((prev) => !prev)}
         totalQuestions={questions.length}
+        user={user}
+        canManageQuestions={canManageQuestions}
+        onLogout={async () => {
+          await fetch('/api/auth/logout', { method: 'POST' });
+          window.location.reload();
+        }}
       />
 
       {/* Main Workspace Area */}
@@ -207,6 +251,7 @@ export default function App() {
                 onNextQuestion={handleNextQuestion}
                 hasPrev={hasPrev}
                 hasNext={hasNext}
+                canManageQuestions={canManageQuestions}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center p-8 text-slate-500">

@@ -1,6 +1,6 @@
 import React from 'react';
-import { BookOpen, Plus, Sparkles, BarChart2, Bookmark } from 'lucide-react';
-import { QuestionCategory } from '../types';
+import { BookOpen, Plus, Sparkles, BarChart2, Bookmark, LogIn, LogOut } from 'lucide-react';
+import { AuthUser, QuestionCategory } from '../types';
 import { CATEGORIES } from '../data/categories';
 
 interface NavbarProps {
@@ -14,6 +14,9 @@ interface NavbarProps {
   showOnlyBookmarked: boolean;
   onToggleShowBookmarked: () => void;
   totalQuestions: number;
+  user: AuthUser;
+  onLogout: () => void;
+  canManageQuestions: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,7 +29,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   bookmarkedCount,
   showOnlyBookmarked,
   onToggleShowBookmarked,
-  totalQuestions
+  totalQuestions,
+  user,
+  onLogout,
+  canManageQuestions
 }) => {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs">
@@ -45,6 +51,14 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden items-center gap-2 border-r border-slate-200 pr-3 sm:flex">
+            {user.picture ? <img src={user.picture} alt="" className="h-8 w-8 rounded-full" /> : <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{user.name.slice(0, 1).toUpperCase()}</div>}
+            <div className="max-w-32">
+              <p className="truncate text-xs font-semibold text-slate-800">{user.name}</p>
+              <p className="truncate text-[10px] text-slate-500">{user.email}</p>
+            </div>
+            <button onClick={onLogout} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900" title="Sign out"><LogOut className="h-4 w-4" /></button>
+          </div>
           {/* Bookmark filter toggle */}
           <button
             onClick={onToggleShowBookmarked}
@@ -86,14 +100,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden md:inline">Progress</span>
           </button>
 
-          {/* Add Question Button - Exact match to screenshot */}
-          <button
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-blue-700 active:scale-98"
-          >
-            <Plus className="h-4 w-4 stroke-[2.5]" />
-            <span>Add Question</span>
-          </button>
+          {canManageQuestions && (
+            <button
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-blue-700 active:scale-98"
+            >
+              <Plus className="h-4 w-4 stroke-[2.5]" />
+              <span>Add Question</span>
+            </button>
+          )}
         </div>
       </div>
 

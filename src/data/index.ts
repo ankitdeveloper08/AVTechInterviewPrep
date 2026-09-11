@@ -11,50 +11,24 @@ export const INITIAL_QUESTIONS: InterviewQuestion[] = [
   ...questionsPart4,
 ].sort((a, b) => a.questionNumber - b.questionNumber);
 
-const STORAGE_KEY = 'tech_interview_questions_v1';
-const BOOKMARKS_KEY = 'tech_interview_bookmarks_v1';
-const MASTERED_KEY = 'tech_interview_mastered_v1';
-
-export function loadQuestions(): InterviewQuestion[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const bookmarks = getBookmarks();
-    const mastered = getMastered();
-
-      const parsed = saved ? JSON.parse(saved) : null;
-      const list: InterviewQuestion[] = Array.isArray(parsed) ? parsed : INITIAL_QUESTIONS;
-
-    // Synchronize bookmarks and mastered state
-      return list
-        .map(q => ({
-          ...q,
-          isBookmarked: bookmarks.includes(q.id),
-          status: mastered.includes(q.id) ? 'mastered' : q.status || 'unviewed'
-        }))
-        .sort((a, b) => a.questionNumber - b.questionNumber);
-  } catch {
-    return INITIAL_QUESTIONS;
-  }
+export function loadQuestions(userId?: string): InterviewQuestion[] {
+  void userId;
+  return INITIAL_QUESTIONS;
 }
 
-export function saveQuestions(questions: InterviewQuestion[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(questions));
-  } catch (e) {
-    console.error('Failed to save questions to local storage', e);
-  }
-
+export function saveQuestions(questions: InterviewQuestion[], userId?: string): void {
   void fetch('/api/questions', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(questions),
   }).catch(() => {
-    // Local storage remains the fallback when the API is unavailable.
+    // The server file is the source of truth; failed requests are not persisted locally.
   });
 }
 
 export async function loadQuestionsFromServer(
-  localQuestions: InterviewQuestion[]
+  localQuestions: InterviewQuestion[],
+  userId?: string,
 ): Promise<InterviewQuestion[]> {
   try {
     const response = await fetch('/api/questions');
@@ -66,7 +40,7 @@ export async function loadQuestionsFromServer(
     };
 
     if (!payload.persisted) {
-      saveQuestions(localQuestions);
+      saveQuestions(localQuestions, userId);
       return localQuestions;
     }
 
@@ -76,51 +50,7 @@ export async function loadQuestionsFromServer(
   }
 }
 
-export function getBookmarks(): number[] {
-  try {
-    const data = localStorage.getItem(BOOKMARKS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function toggleBookmarkStorage(id: number): boolean {
-  try {
-    const current = getBookmarks();
-    const exists = current.includes(id);
-    const updated = exists ? current.filter(x => x !== id) : [...current, id];
-    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(updated));
-    return !exists;
-  } catch {
-    return false;
-  }
-}
-
-export function getMastered(): number[] {
-  try {
-    const data = localStorage.getItem(MASTERED_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function toggleMasteredStorage(id: number): boolean {
-  try {
-    const current = getMastered();
-    const exists = current.includes(id);
-    const updated = exists ? current.filter(x => x !== id) : [...current, id];
-    localStorage.setItem(MASTERED_KEY, JSON.stringify(updated));
-    return !exists;
-  } catch {
-    return false;
-  }
-}
-
-export function resetQuestionsToDefault(): InterviewQuestion[] {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {}
+export function resetQuestionsToDefault(userId?: string): InterviewQuestion[] {
+  void userId;
   return INITIAL_QUESTIONS;
 }

@@ -22,6 +22,7 @@ interface QuestionDetailProps {
   onNextQuestion: () => void;
   hasPrev: boolean;
   hasNext: boolean;
+  canManageQuestions: boolean;
 }
 
 export const QuestionDetail: React.FC<QuestionDetailProps> = ({
@@ -33,6 +34,7 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
   onNextQuestion,
   hasPrev,
   hasNext,
+  canManageQuestions,
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -102,14 +104,15 @@ export const QuestionDetail: React.FC<QuestionDetailProps> = ({
               <span className="hidden sm:inline">Save</span>
             </button>
 
-            {/* Edit Button - Exact match to green button in image.png */}
-            <button
-              onClick={() => onEdit(question)}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-98"
-            >
-              <Edit className="h-3.5 w-3.5" />
-              <span>Edit</span>
-            </button>
+            {canManageQuestions && (
+              <button
+                onClick={() => onEdit(question)}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs transition-all hover:bg-emerald-700 active:scale-98"
+              >
+                <Edit className="h-3.5 w-3.5" />
+                <span>Edit</span>
+              </button>
+            )}
           </div>
         </div>
 
